@@ -1,0 +1,102 @@
+R1(config)#ip route 0.0.0.0 0.0.0.0 10.1.13.3
+R2(config)#ip route 0.0.0.0 0.0.0.0 10.1.23.3
+
+Tạo đường ống Tunnel.
+
+R1(config)#interface tunnel 0
+R1(config-if)#ip address 192.168.1.1 255.255.255.0
+R1(config-if)#tunnel source 10.1.13.1 
+R1(config-if)#tunnel destination 10.1.23.2
+
+Chuyển mode Tunnel sang GRE.
+R1(config-if)#tunnel mode gre ip 
+
+R2(config)#interface tunnel 0
+R2(config-if)#ip address 192.168.1.2 255.255.255.0
+R2(config-if)#tunnel source 10.1.23.2
+R2(config-if)#tunnel destination 10.1.13.1
+
+Chuyển mode Tunnel sang GRE.
+R2(config-if)#tunnel mode gre ip 
+
+Do GRE sẽ đóng gói thêm các GRE hitder lên chúng ta cần giảm MTU và MSS xuống để tránh phân mảng gói tin.
+
+R1(config)#interface tunnel 0
+R1(config-if)#ip mtu 1400
+R1(config-if)#ip tcp adjust-mss 1360
+
+R2(config)#interface tunnel 0
+R2(config-if)#ip mtu 1400
+R2(config-if)#ip tcp adjust-mss 1360
+
+Cấu hình cho 2 LAN kết nối với nhau qua đường Tunnel.
+
+R1(config)#ip route 20.0.0.0 255.255.255.0 192.168.1.2
+R2(config)#ip route 10.0.0.0 255.255.255.0 192.168.1.1
+
+Tuy nhiên các Trafix giữa 2 side không được mã hóa trong GRE Tunnel lên dễ bị mất dữ liệu
+trên đường truyền. VÌ vậy chúng ta kết hợp IPsec để mã hóa dữ liệu trong GRE Tunnel.
+
+R1(config)#crypto isakmp policy 1
+=> định nghĩa isakmp policy với số thứ tự là 1
+
+R1(config-isakmp)#encryption 3des 
+=> xác định thuật toán mã hóa
+
+R1(config-isakmp)#hash md5 
+=> xác định thuật toán băm
+
+R1(config-isakmp)#authentication pre-share 
+=> xác định thuật toán xác thực
+
+R1(config-isakmp)#group 2
+=> xác định thuật toán phân bổ key Diffie-Hellman với độ dài là 1024 bit
+R1(config-isakmp)#exit
+
+R1(config)#crypto isakmp key vpn address 10.1.23.2
+=> định nghĩa password "key" được sử dụng với R2 có ip Pulbic
+
+R1(config)#crypto ipsec transform-set SET1 esp-3des esp-md5-hmac 
+=> định nghĩa thông số phase tên là  "SET1"
+=> sử dụng ESP với thuật toán mã hóa 3DES và hàm băm MD5
+
+R1(cfg-crypto-trans)#mode transport 
+=> chỉ mã hóa dữ liệu của mỗi gói và kh ảnh hưởng đến header khác
+R1(cfg-crypto-trans)#exit
+
+R1(config)#crypto ipsec profile GRE-IPSEC
+R1(ipsec-profile)#set security-association lifetime seconds 86400
+=> thời gian tồn tại của IPsec SA
+
+R1(ipsec-profile)#set transform-set SET1
+=> xác định tên profile transform-set ở trên
+
+R2(config)#crypto isakmp policy 1
+R2(config-isakmp)#encryption 3des 
+R2(config-isakmp)#hash md5 
+R2(config-isakmp)#authentication pre-share  
+R2(config-isakmp)#group 2
+R2(config-isakmp)#exit
+R2(config)#crypto isakmp key vpn address 10.1.13.1
+R2(config)#crypto ipsec transform-set SET1 esp-3des esp-md5-hmac 
+R2(cfg-crypto-trans)#mode transport 
+R2(cfg-crypto-trans)#exit
+R2(config)#crypto ipsec profile GRE-IPSEC
+R2(ipsec-profile)#set security-association lifetime seconds 86400
+R2(ipsec-profile)#set transform-set SET1
+
+Sau đó gán IPsec này vào Tunnel0 của GRE.
+
+R1(config)#interface tunnel 0
+R1(config-if)#tunnel protection ipsec profile GRE-IPSEC
+
+R2(config)#interface tunnel 0
+R2(config-if)#tunnel protection ipsec profile GRE-IPSEC
+
+Lệnh kiểm tra
+#show crypto ipsec sa
+#show crypto isakmp sa
+#show crypto session
+#show int tun 0
+#show crypto isakmp key
+

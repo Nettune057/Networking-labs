@@ -1,0 +1,36 @@
+Create VRF's
+
+Router(config)#vrf definition ISP-1
+Router(config-vrf)#address-family ipv4
+Router(config-vrf-af)#exit
+Router(config-vrf)#vrf definition ISP-2
+Router(config-vrf)#address-family ipv4
+
+Add Route
+
+Router(config)#int gi 0/1
+Router(config-if)#ip address 10.0.0.1 255.255.255.0
+Router(config-if)#vrf forwarding ISP-1
+
+Router(config-if)#ip address 10.0.0.1 255.255.255.0
+Router(config-if)#no shut
+Router(config-if)#exit
+   
+
+Router(config)#int gi 0/2
+Router(config-if)#vrf forwarding ISP-2
+Router(config-if)#ip address 10.0.0.1 255.255.255.0
+Router(config-if)#no shut
+
+
+Router(config)#int loopback 1
+Router(config-if)#vrf forwarding ISP-1
+Router(config-if)#ip address 172.16.10.1 255.255.255.0
+
+Router(config)#int loopback 2
+Router(config-if)#vrf forwarding ISP-2
+Router(config-if)#ip address 172.16.20.1 255.255.255.0
+
+Routing Table
+
+Router#ping vrf ISP-1 10.10.10.1
